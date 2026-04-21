@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum ContentStatus {
+  DRAFT
+  APPROVED
+  POSTED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum GroupCategory {
+  IT
+  SALES
+  MARKETING
+  GENERAL
+  OTHER
+}
+
+enum PostLogStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String    // Lưu dạng bcrypt hash
+  role      Role      @default(STAFF)
+  createdAt DateTime  @default(now())
+
+  contents Content[]
+  postLogs PostLog[]
+}
+
+// Bài đăng tuyển dụng
+model Content {
+  id           String        @id @default(cuid())
+  title        String        // Tiêu đề bài đăng (VD: "Tuyển Senior React Dev")
+  position     String        // Vị trí tuyển dụng
+  description  String        // Mô tả công việc
+  requirements String        // Yêu cầu ứng viên
+  benefits     String        // Quyền lợi
+  applyInfo    String        // Cách ứng tuyển (email, link, SĐT)
+  hashtags     String        @default("") // Lưu dạng "#it #developer #tuyendung"
+  status       ContentStatus @default(DRAFT)
+  authorId     String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  author   User      @relation(fields: [authorId], references: [id])
+  medias   Media[]
+  postLogs PostLog[]
+}
+
+// Ảnh/video đính kèm bài đăng
+model Media {
+  id           String    @id @default(cuid())
+  contentId    String
+  url          String    // Đường dẫn: /uploads/filename.jpg
+  type         MediaType
+  originalName String    // Tên file gốc khi upload
+  createdAt    DateTime  @default(now())
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+// Danh sách Facebook group để đăng bài
+model FbGroup {
+  id           String        @id @default(cuid())
+  name         String
+  url          String        @unique // https://facebook.com/groups/...
+  category     GroupCategory
+  memberCount  Int?          // Số thành viên ước lượng
+  notes        String        @default("") // Ghi chú nội bộ
+  lastPostedAt DateTime?     // Lần đăng gần nhất
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+
+  postLogs PostLog[]
+}
+
+// Lịch sử đăng bài: group nào, bài nào, ai đăng, khi nào
+model PostLog {
+  id         String        @id @default(cuid())
+  contentId  String
+  fbGroupId  String
+  postedById String?       // nullable — wired up ở Step 6 (auth)
+  status     PostLogStatus @default(SUCCESS)
+  errorMsg   String?       // Lý do thất bại
+  postUrl    String?       // Link bài đăng (tuỳ chọn)
+  note       String        @default("")
+  postedAt   DateTime      @default(now())
+
+  content  Content  @relation(fields: [contentId], references: [id])
+  fbGroup  FbGroup  @relation(fields: [fbGroupId], references: [id])
+  postedBy User?    @relation(fields: [postedById], references: [id])
+}
